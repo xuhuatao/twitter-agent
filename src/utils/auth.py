@@ -15,7 +15,7 @@ def main() -> None:
     consumer_key = os.environ.get("API_KEY") or input("consumer_key: ")
     consumer_secret = os.environ.get("API_SECRET_KEY") or input("consumer_secret: ")
 
-    auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+    auth = tweepy.OAuth1UserHandler(consumer_key, consumer_secret)
     auth_url = auth.get_authorization_url()
 
     print("\n" + auth_url, "\n")

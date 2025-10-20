@@ -20,6 +20,7 @@ from twitter_client import fetch_clients
 from executor.executor import TwitterExecutor
 from collector.collector import TwitterCollector
 from collector.trainer import AgentTrainer
+from collector.trending_collector import TrendingCollector
 from strategy.strategy import TwitterStrategy
 
 # load environment variables
@@ -53,8 +54,11 @@ def cli():
 @click.option(
     "--train", default=False, is_flag=True, help="Train Model"
 )
+@click.option(
+    "--collect-trending", default=False, is_flag=True, help="Collect trending tweets"
+)
 @async_command
-async def main(run_engine: bool, test: bool, ingest: bool, train: bool):
+async def main(run_engine: bool, test: bool, ingest: bool, train: bool, collect_trending: bool):
     twitter_clients = fetch_clients()
     weaviate_client = weaviate.Client("http://localhost:8080")
 
@@ -80,6 +84,13 @@ async def main(run_engine: bool, test: bool, ingest: bool, train: bool):
         if train:
             trainer = AgentTrainer(client, weaviate_client, OPENAI_API_KEY)
             await trainer.run()
+        
+        if collect_trending:
+            trending_collector = TrendingCollector(agent_id, client, weaviate_client)
+            print(f"\n🔥 收集 {agent_name} 的热门推文")
+            # 收集多个主题的热门推文
+            topics = ["AI", "crypto", "web3", "blockchain", "technology"]
+            await trending_collector.collect_top_tweets_by_topic(topics, tweets_per_topic=1)
 
         agents.append((collector, strategy, executor, agent_name, agent_id))
 

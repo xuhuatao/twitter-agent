@@ -15,7 +15,7 @@ with open('./tokens.yml', 'r') as f:
     tokens = yaml.safe_load(f)
 
 def _fetch_v1_api(access_token, access_token_secret):
-    auth = tweepy.OAuthHandler(API_KEY, API_SECRET_KEY)
+    auth = tweepy.OAuth1UserHandler(API_KEY, API_SECRET_KEY)
     auth.set_access_token(access_token, access_token_secret)
     api = tweepy.API(auth)
     return api
