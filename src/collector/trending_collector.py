@@ -14,26 +14,35 @@ class TrendingCollector:
         self.client = client
         self.weaviate_client = weaviate_client
     
-    async def collect_trending_tweets(self, query: str = "crypto OR bitcoin OR ethereum", max_results: int = 10):
+    async def collect_trending_tweets(self, query: str = "crypto OR bitcoin OR ethereum", max_results: int = 10, use_simple_search: bool = False):
         """
         搜索热门推文并存入数据库
         
         Args:
             query: 搜索关键词
             max_results: 最多返回多少条推文
+            use_simple_search: 是否使用简化搜索(避免速率限制)
         """
         print(f"\n🔥 开始搜索热门推文: '{query}'")
         
         try:
-            # 搜索最近的热门推文
-            # tweet_fields 包含我们需要的所有字段
-            tweets = self.client.search_recent_tweets(
-                query=query,
-                max_results=max_results,
-                tweet_fields=['created_at', 'public_metrics', 'author_id', 'text'],
-                expansions=['author_id'],
-                user_fields=['public_metrics']
-            )
+            if use_simple_search:
+                # 使用更简单的搜索,减少 API 调用
+                tweets = self.client.search_recent_tweets(
+                    query=query,
+                    max_results=max_results,
+                    tweet_fields=['public_metrics', 'author_id', 'text']
+                )
+            else:
+                # 搜索最近的热门推文
+                # tweet_fields 包含我们需要的所有字段
+                tweets = self.client.search_recent_tweets(
+                    query=query,
+                    max_results=max_results,
+                    tweet_fields=['created_at', 'public_metrics', 'author_id', 'text'],
+                    expansions=['author_id'],
+                    user_fields=['public_metrics']
+                )
             
             if not tweets.data:
                 print("❌ 没有找到推文")
@@ -60,7 +69,7 @@ class TrendingCollector:
             follower_count = 0
             
             # 从 includes 中获取用户信息
-            if tweets.includes and 'users' in tweets.includes:
+            if not use_simple_search and tweets.includes and 'users' in tweets.includes:
                 for user in tweets.includes['users']:
                     if user.id == author_id:
                         follower_count = user.public_metrics['followers_count']
@@ -163,4 +172,3 @@ class TrendingCollector:
         
         print(f"\n✅ 总共收集了 {len(all_tweets)} 条热门推文!")
         return all_tweets
-

@@ -92,24 +92,74 @@ async def main(run_engine: bool, test: bool, ingest: bool, train: bool, collect_
             topics = ["AI", "crypto", "web3", "blockchain", "technology"]
             await trending_collector.collect_top_tweets_by_topic(topics, tweets_per_topic=1)
 
-        agents.append((collector, strategy, executor, agent_name, agent_id))
+        agents.append((collector, strategy, executor, agent_name, agent_id, client, weaviate_client))
 
     # run
     if run_engine:
         await asyncio.gather(
             *(
-                run(collector, strategy, executor, agent_name, agent_id, test)
-                for collector, strategy, executor, agent_name, agent_id in agents
+                run(collector, strategy, executor, agent_name, agent_id, test, client, weaviate_client)
+                for collector, strategy, executor, agent_name, agent_id, client, weaviate_client in agents
             )
         )
 
 
-async def run(collector, strategy, executor, agent_name, agent_id, test):
+async def collect_tweets_from_timeline(client, agent_id, agent_name, weaviate_client):
+    """从 Twitter 时间线收集推文的辅助函数"""
+    print(f"\033[96m\033[1m\n*****{agent_name} 推文收集 Agent 🌟 *****\n\033[0m\033[0m")
+    print(f"📡 正在从时间线获取最新推文...")
+    
+    try:
+        from datetime import datetime, timezone
+        
+        # 获取时间线推文
+        timeline = client.get_home_timeline(
+            max_results=10,
+            tweet_fields=['created_at', 'public_metrics', 'author_id', 'text']
+        )
+        
+        if timeline.data:
+            print(f"✅ 找到 {len(timeline.data)} 条新推文")
+            now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            
+            saved_count = 0
+            for tweet in timeline.data:
+                properties = {
+                    "tweet": tweet.text,
+                    "tweet_id": str(tweet.id),
+                    "agent_id": str(agent_id),
+                    "author_id": str(tweet.author_id),
+                    "like_count": tweet.public_metrics['like_count'],
+                    "follower_count": 0,
+                    "date": now,
+                }
+                
+                try:
+                    weaviate_client.data_object.create(properties, "Tweets")
+                    saved_count += 1
+                except Exception as e:
+                    # 可能是重复推文,静默忽略
+                    pass
+            
+            print(f"✅ 成功存入 {saved_count} 条推文到数据库")
+        else:
+            print("ℹ️  时间线暂时没有新推文")
+            
+    except Exception as e:
+        print(f"⚠️  收集推文时出错: {e}")
+        print("ℹ️  将继续使用数据库中的现有推文")
+
+
+async def run(collector, strategy, executor, agent_name, agent_id, test, client=None, weaviate_client=None):
     print(f"\033[92m\033[1m\n*****Running {agent_name} Engine 🚒 *****\n\033[0m\033[0m")
 
     while True:
         try:
-            # Step 1: Run Collector
+            # Step 0: 先收集最新推文 (新增!)
+            if client and weaviate_client:
+                await collect_tweets_from_timeline(client, agent_id, agent_name, weaviate_client)
+            
+            # Step 1: Run Collector (从数据库读取推文)
             print(
                 f"\033[92m\033[1m\n*****Running {agent_name} Collector 🔎 *****\n\033[0m\033[0m"
             )
